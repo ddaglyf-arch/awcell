@@ -47,39 +47,54 @@ export function createPurchaseReceiptPdf(input: {
   const formatMoney = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
   const date = new Date(input.createdAt).toLocaleString("pt-BR");
   const lines = [
-    "AW CELL",
-    "COMPROVANTE DE COMPRA",
-    "========================================",
-    `Pedido: #${input.orderId.substring(0, 8).toUpperCase()}`,
-    `Cliente: ${input.customerName}`,
-    `Telegram ID: ${input.customerTelegramId}`,
-    `Data e hora: ${date}`,
-    `Pagamento: ${input.paymentMethod}`,
-    "----------------------------------------",
-    "PRODUTOS",
+    "╔════════════════════════════════════════╗",
+    "║        AW CELL - COMPROVANTE DE COMPRA        ║",
+    "╚════════════════════════════════════════╝",
+    "",
+    `PEDIDO: #${input.orderId.substring(0, 8).toUpperCase()}`,
+    `DATA: ${date}`,
+    `CLIENTE: ${input.customerName}`,
+    "",
+    "════════════════════════════════════════",
+    "PRODUTOS ADQUIRIDOS",
+    "════════════════════════════════════════",
   ];
 
   for (const item of input.items) {
-    lines.push(...wrapText(item.name, 38));
-    lines.push(`  ${item.quantity} x ${formatMoney(item.unitPrice)} = ${formatMoney(item.subtotal)}`);
+    lines.push(`${item.name}`);
+    lines.push(`  Quantidade: ${item.quantity}`);
+    lines.push(`  Valor Unitário: ${formatMoney(item.unitPrice)}`);
+    lines.push(`  Subtotal: ${formatMoney(item.subtotal)}`);
+    lines.push("");
   }
 
   lines.push(
-    "----------------------------------------",
-    `TOTAL: ${formatMoney(input.total)}`,
-    "PAGAMENTO APROVADO",
-    "----------------------------------------",
-    `Token de entrega: ${input.deliveryToken}`,
-    `WhatsApp: ${input.whatsapp}`,
-    "Envie este token e o print do pagamento aprovado",
-    "no WhatsApp para receber o produto.",
+    "════════════════════════════════════════",
+    `VALOR TOTAL: ${formatMoney(input.total)}`,
+    `MÉTODO DE PAGAMENTO: ${input.paymentMethod}`,
+    "STATUS: ✓ PAGAMENTO APROVADO",
+    "════════════════════════════════════════",
     "",
-    "Obrigado pela compra!",
+    "🔑 TOKEN DE ENTREGA:",
+    `${input.deliveryToken}`,
+    "",
+    "INSTRUÇÕES DE ENTREGA:",
+    "1. Copie seu token de entrega acima",
+    "2. Envie este comprovante no WhatsApp",
+    `3. Converse com nosso atendimento`,
+    `4. Receba seu pedido em até 24 horas",
+    "",
+    `📱 WhatsApp: ${input.whatsapp}`,
+    "",
+    "════════════════════════════════════════",
+    "OBRIGADO PELA COMPRA!",
+    "Qualidade garantida - AW CELL",
+    "════════════════════════════════════════",
   );
 
   const pageWidth = 595;
   const pageHeight = 842;
-  const content = ["BT", "/F1 11 Tf", "50 790 Td", "14 TL"];
+  const content = ["BT", "/F1 10 Tf", "50 790 Td", "12 TL"];
   lines.forEach((line, index) => {
     if (index > 0) content.push("T*");
     content.push(`(${escapePdfText(line)}) Tj`);
@@ -91,7 +106,7 @@ export function createPurchaseReceiptPdf(input: {
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
     `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>`,
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>",
     `<< /Length ${Buffer.byteLength(pageContent, "ascii")} >>\nstream\n${pageContent}\nendstream`,
   ];
 

@@ -226,20 +226,30 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
 
             let message = "";
             if (payment.status === "approved") {
-              message = storeConfig?.payment_approved_message || "✅ Pagamento aprovado com sucesso!";
-              message += `\n\n👤 Cliente: ${customerName}`;
-              message += `\n\n📋 Pedido #${orderId.substring(0, 8)}\n💰 Total: R$ ${(order.total / 100).toFixed(2)}`;
-              message += "\n\n📦 Produtos:\n";
+              message = storeConfig?.payment_approved_message || "✅ PAGAMENTO APROVADO COM SUCESSO!";
+              message += `\n${'═'.repeat(40)}\n`;
+              message += `\n👤 Cliente: <b>${customerName}</b>\n`;
+              message += `📋 Pedido: <code>#${orderId.substring(0, 8).toUpperCase()}</code>\n`;
+              message += `💰 Valor Total: R$ ${(order.total / 100).toFixed(2)}\n`;
+              message += `📅 Data: ${new Date(order.created_at).toLocaleDateString('pt-BR')}\n`;
+              message += `${'═'.repeat(40)}\n`;
+              message += "\n📦 PRODUTOS:\n";
               for (const item of order.order_items || []) {
-                message += `• ${item.products?.name || "Produto"} x${item.quantity}\n`;
+                message += `  • ${item.products?.name || "Produto"}\n`;
+                message += `    └─ Qtd: ${item.quantity} x R$ ${(item.unit_price / 100).toFixed(2)}\n`;
               }
-              message += `\n🔑 Token de entrega: <code>${order.delivery_token || "consulte o pedido"}</code>`;
-              message += `\n\n📲 Para receber o produto, fale no WhatsApp ${config.support.whatsappDisplay}.`;
-              message += "\n\n✉️ Seu comprovante (PDF) está sendo enviado...";
+              message += `\n${'═'.repeat(40)}\n`;
+              message += `\n🔑 <b>TOKEN DE ENTREGA:</b>\n<code>${order.delivery_token || "CONSULTE SEU PEDIDO"}</code>\n`;
+              message += `\n📲 <b>PRÓXIMO PASSO:</b>\n`;
+              message += `Envie o token acima + screenshot desta tela\n`;
+              message += `no WhatsApp para receber seu pedido.\n`;
+              message += `\n⏱️ Tempo de entrega: Até 24 horas\n`;
             } else if (payment.status === "pending") {
-              message = storeConfig?.payment_pending_message || "⏳ Pagamento pendente. Aguardando confirmação...";
+              message = storeConfig?.payment_pending_message || "⏳ PAGAMENTO PENDENTE";
+              message += `\n\nAguardando confirmação do pagamento...\nTente novamente em alguns instantes.`;
             } else if (payment.status === "rejected") {
-              message = storeConfig?.payment_rejected_message || "❌ Pagamento recusado. Tente novamente.";
+              message = storeConfig?.payment_rejected_message || "❌ PAGAMENTO RECUSADO";
+              message += `\n\nOcorreu um problema ao processar seu pagamento.\nTente novamente ou entre em contato conosco.`;
             }
 
             try {
