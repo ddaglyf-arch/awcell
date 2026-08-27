@@ -2,6 +2,8 @@
 
 Este projeto usa um servidor Express com webhook do Telegram. A Railway fornece o dominio publico e o bot registra o webhook automaticamente ao iniciar.
 
+O runtime de producao e Node.js 22, exigido pelas versoes atuais do Supabase.
+
 ## 1. Preparar o banco
 
 1. Crie um projeto no [Supabase](https://supabase.com).
