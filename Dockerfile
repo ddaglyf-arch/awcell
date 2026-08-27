@@ -20,7 +20,7 @@ COPY package*.json ./
 
 RUN npm ci --only=production
 
-COPY dist ./dist
+COPY --from=builder /app/dist ./dist
 
 # Set environment
 ENV NODE_ENV=production
