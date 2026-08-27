@@ -7,12 +7,13 @@ export const DEFAULT_BANNER_IMAGE_URL = "https://i.postimg.cc/7Htz3vX9/493616250
 const configuredPublicUrl = process.env.PUBLIC_URL?.trim();
 const railwayPublicDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
 const isExampleUrl = configuredPublicUrl?.includes("seu-app") || configuredPublicUrl?.includes("example.com");
-const publicUrl =
+const rawPublicUrl =
   !isExampleUrl && configuredPublicUrl
     ? configuredPublicUrl
     : railwayPublicDomain
       ? `https://${railwayPublicDomain}`
       : "http://localhost:3000";
+const publicUrl = /^https?:\/\//i.test(rawPublicUrl) ? rawPublicUrl : `https://${rawPublicUrl}`;
 
 export const config = {
   telegram: {

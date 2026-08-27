@@ -41,7 +41,7 @@ Se preferir um dominio proprio, defina tambem:
 PUBLIC_URL=https://bot.seudominio.com
 ```
 
-Nao deixe `PUBLIC_URL=https://seu-app.up.railway.app`: esse e apenas um exemplo. Use o dominio real mostrado em **Settings > Networking**. Se `PUBLIC_URL` nao for definido, o bot usa `RAILWAY_PUBLIC_DOMAIN` automaticamente.
+Nao deixe `PUBLIC_URL=https://seu-app.up.railway.app`: esse e apenas um exemplo. Use o dominio real mostrado em **Settings > Networking**. Pode informar o dominio com ou sem `https://`; o bot normaliza automaticamente para HTTPS. Se `PUBLIC_URL` nao for definido, o bot usa `RAILWAY_PUBLIC_DOMAIN` automaticamente.
 
 Opcionalmente, defina um caminho e um segredo para o webhook do Telegram:
 
