@@ -81,16 +81,16 @@ export function createPurchaseReceiptPdf(input: {
     "INSTRUÇÕES DE ENTREGA:",
     "1. Copie seu token de entrega acima",
     "2. Envie este comprovante no WhatsApp",
-    `3. Converse com nosso atendimento`,
-    `4. Receba seu pedido em até 24 horas",
+    "3. Converse com nosso atendimento",
+    "4. Receba seu pedido em até 24 horas",
     "",
-    `📱 WhatsApp: ${input.whatsapp}`,
+    `WhatsApp: ${input.whatsapp}`,
     "",
     "════════════════════════════════════════",
     "OBRIGADO PELA COMPRA!",
     "Qualidade garantida - AW CELL",
     "════════════════════════════════════════",
-  );
+  ];
 
   const pageWidth = 595;
   const pageHeight = 842;
