@@ -30,6 +30,8 @@ SUPABASE_URL=https://seu-projeto.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=chave_service_role
 MERCADOPAGO_ACCESS_TOKEN=access_token_do_mercado_pago
 MERCADOPAGO_WEBHOOK_SECRET=segredo_opcional
+WHATSAPP_NUMBER=5521997898338
+WHATSAPP_DISPLAY=(21) 99789-8338
 NODE_ENV=production
 ```
 
@@ -59,6 +61,8 @@ https://SEU_DOMINIO_RAILWAY/webhooks/mercadopago
 ```
 
 Use os eventos `payment.created` e `payment.updated`. Essa rota ja existe no bot e atualiza o pedido apos a notificacao.
+
+Quando o pagamento for aprovado, o bot envia os produtos, um token unico do pedido, o WhatsApp configurado e pede o token mais um print da tela de pagamento aprovado. `WHATSAPP_NUMBER` deve ficar sem espacos.
 
 ## 5. Conferir o deploy
 

@@ -31,6 +31,7 @@ import {
 } from "./handlers/adminHandlers";
 import { handleCheckout, handleCancelCheckout } from "./handlers/checkoutHandlers";
 import { processWebhookNotification } from "./services/paymentService";
+import { decrementOrderStock } from "./services/orderService";
 import supabase from "./database";
 
 // Initialize Express and Bot
@@ -156,12 +157,20 @@ bot.on("callback_query", async (ctx) => {
 // Webhook endpoint for Mercado Pago
 app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
   try {
-    const { action, data } = req.body;
+    const { action, type, data } = req.body;
+    const paymentId = data?.id || req.body.id;
+
+    if (!(action === "payment.created" || action === "payment.updated" || type === "payment") || !paymentId) {
+      res.json({ received: true });
+      return;
+    }
+
+    res.json({ received: true });
 
     // Log the webhook
     const { error: logError } = await supabase.from("webhook_logs").insert({
       provider: "mercado_pago",
-      event_type: action,
+      event_type: action || type || "payment",
       payload: data,
       processed: false,
     });
@@ -170,34 +179,41 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
       console.error("Error logging webhook:", logError);
     }
 
-    // Handle different notification types
-    if (action === "payment.created" || action === "payment.updated") {
-      const paymentId = data.id;
+    // Process the payment after acknowledging the notification.
+    const { getPaymentStatus } = await import("./services/paymentService");
+    const payment = await getPaymentStatus(paymentId);
 
-      // Get payment details from Mercado Pago
-      const { getPaymentStatus } = await import("./services/paymentService");
-      const payment = await getPaymentStatus(paymentId);
+    if (payment) {
+      const orderId = payment.external_reference;
 
-      if (payment) {
-        const orderId = payment.external_reference;
+      // Get order from database
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .select("*, order_items(quantity, products(name))")
+        .eq("id", orderId)
+        .single();
 
-        // Get order from database
-        const { data: order, error: orderError } = await supabase
-          .from("orders")
-          .select("*")
-          .eq("id", orderId)
+      if (!orderError && order) {
+        const statusChanged = order.payment_status !== payment.status;
+
+        if (!statusChanged) {
+          console.log("Mercado Pago notification already processed", { orderId, paymentId });
+          return;
+        }
+
+        // Process the payment
+        await processWebhookNotification(paymentId, orderId, order.total);
+
+        if (payment.status === "approved") {
+          await decrementOrderStock(orderId);
+        }
+
+        // Send notification to user
+        const { data: user } = await supabase
+          .from("users")
+          .select("telegram_id")
+          .eq("id", order.user_id)
           .single();
-
-        if (!orderError && order) {
-          // Process the payment
-          await processWebhookNotification(paymentId, orderId, order.total);
-
-          // Send notification to user
-          const { data: user } = await supabase
-            .from("users")
-            .select("telegram_id")
-            .eq("id", order.user_id)
-            .single();
 
           if (user) {
             const { getStoreConfig } = await import("./database");
@@ -207,6 +223,13 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
             if (payment.status === "approved") {
               message = storeConfig?.payment_approved_message || "Pagamento aprovado!";
               message += `\n\n✅ Pedido #${orderId.substring(0, 8)}\n💰 Total: R$ ${(order.total / 100).toFixed(2)}`;
+              message += "\n\n📦 Produtos:\n";
+              for (const item of order.order_items || []) {
+                message += `• ${item.products?.name || "Produto"} x${item.quantity}\n`;
+              }
+              message += `\n🔑 Token de entrega: ${order.delivery_token || "consulte o pedido"}`;
+              message += `\n\n📲 Para receber o produto, fale no WhatsApp ${config.support.whatsappDisplay}.`;
+              message += "\nEnvie o token e um print desta tela de pagamento aprovado.";
             } else if (payment.status === "pending") {
               message = storeConfig?.payment_pending_message || "Pagamento pendente.";
             } else if (payment.status === "rejected") {
@@ -214,19 +237,24 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
             }
 
             try {
-              await bot.telegram.sendMessage(user.telegram_id, message);
+              await bot.telegram.sendMessage(user.telegram_id, message, {
+                reply_markup: {
+                  inline_keyboard: [[
+                    {
+                      text: "📲 Falar no WhatsApp",
+                      url: `https://wa.me/${config.support.whatsappNumber}`,
+                    },
+                  ]],
+                },
+              });
             } catch (error) {
               console.error("Error sending Telegram message:", error);
             }
           }
         }
       }
-    }
-
-    res.json({ received: true });
   } catch (error) {
     console.error("Error processing webhook:", error);
-    res.status(500).json({ error: "Internal server error" });
   }
 });
 

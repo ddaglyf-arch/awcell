@@ -56,10 +56,14 @@ CREATE TABLE IF NOT EXISTS orders (
   total INTEGER NOT NULL CHECK (total >= 0), -- Total in cents
   status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'delivered', 'cancelled')),
   payment_id VARCHAR(255),
+  delivery_token VARCHAR(32) UNIQUE,
   payment_status VARCHAR(20) DEFAULT 'pending' CHECK (payment_status IN ('pending', 'approved', 'rejected', 'cancelled', 'expired')),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Migration for databases created before delivery tokens were added.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_token VARCHAR(32) UNIQUE;
 
 -- Order items table
 CREATE TABLE IF NOT EXISTS order_items (
