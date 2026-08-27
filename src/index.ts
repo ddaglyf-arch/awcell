@@ -31,7 +31,6 @@ import {
 } from "./handlers/adminHandlers";
 import { handleCheckout, handleCancelCheckout } from "./handlers/checkoutHandlers";
 import { processWebhookNotification } from "./services/paymentService";
-import { decrementOrderStock } from "./services/orderService";
 import supabase from "./database";
 import { createPurchaseReceiptPdf } from "./utils/receiptPdf";
 
@@ -209,6 +208,7 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
         }
 
         if (payment.status === "approved" && statusChanged) {
+          const { decrementOrderStock } = await import("./services/orderService");
           await decrementOrderStock(orderId);
         }
 
