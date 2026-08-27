@@ -236,7 +236,22 @@ app.get("/health", (req: Request, res: Response) => {
 });
 
 // Register Telegram webhook before accepting requests.
-app.use(config.server.webhookPath, bot.webhookCallback(config.server.webhookPath));
+const telegramWebhookHandler = bot.webhookCallback(config.server.webhookPath);
+app.post(config.server.webhookPath, (req, res, next) => {
+  if (
+    config.telegram.webhookSecret &&
+    req.header("x-telegram-bot-api-secret-token") !== config.telegram.webhookSecret
+  ) {
+    res.sendStatus(401);
+    return;
+  }
+
+  console.log("📨 Telegram update received", {
+    updateId: req.body?.update_id,
+    path: req.path,
+  });
+  return telegramWebhookHandler(req, res, next);
+});
 
 // Start server and register Telegram webhook.
 const PORT = config.server.port || 3000;

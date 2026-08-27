@@ -76,6 +76,8 @@ A resposta esperada e:
 
 Nos logs da Railway deve aparecer `Telegram webhook registered`. Depois envie `/start` para o bot no Telegram.
 
+Ao enviar um comando, tambem deve aparecer `Telegram update received`. Se esse log nao aparecer, confira o webhook em `getWebhookInfo` do Telegram e confirme se o dominio publico esta ativo.
+
 ## Observacoes
 
 - Nao use `npm run dev` em producao; a Railway executa `npm start` pelo `Procfile`.
