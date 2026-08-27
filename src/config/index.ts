@@ -29,13 +29,17 @@ export const config = {
     accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN || "",
     webhookSecret: process.env.MERCADOPAGO_WEBHOOK_SECRET || "",
   },
+  support: {
+    whatsappNumber: process.env.WHATSAPP_NUMBER || "5521997898338",
+    whatsappDisplay: process.env.WHATSAPP_DISPLAY || "(21) 99789-8338",
+  },
   server: {
     port: parseInt(process.env.PORT || "3000", 10),
     publicUrl,
     webhookPath: process.env.TELEGRAM_WEBHOOK_PATH || "/telegram/webhook",
     nodeEnv: process.env.NODE_ENV || "development",
   },
-};
+} as const;
 
 // Validate required environment variables
 const requiredEnvVars = [
