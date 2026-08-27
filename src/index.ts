@@ -150,7 +150,19 @@ bot.on("callback_query", async (ctx) => {
     }
 
   } catch (error) {
-    console.error("Error handling callback query:", error);
+    console.error("❌ Erro ao processar botão:", error);
+    console.error("Dados do callback:", (ctx.callbackQuery as any)?.data);
+    console.error("Stack:", (error as any)?.stack);
+    try {
+      await ctx.answerCbQuery("Erro ao processar. Tente novamente.", { show_alert: false });
+      await ctx.reply("⚠️ Erro ao processar sua ação. Tente novamente.", {
+        reply_markup: {
+          inline_keyboard: [[{ text: "🏠 Voltar ao Início", callback_data: "back_to_menu" }]],
+        },
+      });
+    } catch (replyError) {
+      console.error("❌ Erro ao enviar mensagem de erro:", replyError);
+    }
   }
 });
 
