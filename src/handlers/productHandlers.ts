@@ -14,29 +14,53 @@ export async function handleViewProducts(ctx: Context) {
       return;
     }
 
-    await ctx.reply(`🛍️ LOJA\n\n${products.length} produto(s) disponível(is). Escolha um item:`, {
+    // Enviar banner com primeiro produto
+    const firstProduct = products[0];
+    const caption = `🛍️ ${firstProduct.name}\n\n${firstProduct.description}\n\n💰 R$ ${(firstProduct.price / 100).toFixed(2)}\n📦 Estoque: ${firstProduct.stock}`;
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "💳 Comprar agora via PIX", callback_data: `buy_now_${firstProduct.id}` }],
+        [{ text: "🛒 Adicionar ao carrinho", callback_data: `add_to_cart_${firstProduct.id}_1` }],
+        [{ text: "🔎 Ver detalhes", callback_data: `product_${firstProduct.id}` }],
+      ],
+    };
+
+    if (firstProduct.image_url) {
+      await ctx.replyWithPhoto(firstProduct.image_url, { caption, reply_markup: keyboard });
+    } else {
+      await ctx.reply(caption, { reply_markup: keyboard });
+    }
+
+    // Enviar resto dos produtos em grupos de 3 (para não bombard)
+    const batchSize = 3;
+    for (let i = 1; i < products.length; i += batchSize) {
+      const batch = products.slice(i, i + batchSize);
+      let productsList = "🛍️ MAIS PRODUTOS\n\n";
+      
+      for (const product of batch) {
+        productsList += `📦 ${product.name}\n`;
+        productsList += `💰 R$ ${(product.price / 100).toFixed(2)} | 📊 Estoque: ${product.stock}\n`;
+        productsList += `ID: <code>${product.id}</code>\n\n`;
+      }
+
+      const batchKeyboard = {
+        inline_keyboard: batch.map((product) => [
+          { text: `${product.name} - R$ ${(product.price / 100).toFixed(2)}`, callback_data: `product_${product.id}` },
+        ]),
+      };
+
+      await ctx.reply(productsList, {
+        reply_markup: batchKeyboard,
+        parse_mode: "HTML",
+      });
+
+      // Pequeno delay entre batches para evitar rate limit
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    await ctx.reply("🛍️ FIM DO CATÁLOGO", {
       reply_markup: { inline_keyboard: [[{ text: "🏠 Voltar", callback_data: "back_to_menu" }]] },
     });
-
-    await ctx.replyWithPhoto(DEFAULT_BANNER_IMAGE_URL, {
-      caption: "🛍️ Confira nosso catálogo",
-    });
-
-    for (const product of products) {
-      const caption = `🛍️ ${product.name}\n\n${product.description}\n\n💰 R$ ${(product.price / 100).toFixed(2)}\n📦 Estoque: ${product.stock}`;
-      const keyboard = {
-        inline_keyboard: [
-          [{ text: "💳 Comprar agora via PIX", callback_data: `buy_now_${product.id}` }],
-          [{ text: "🛒 Adicionar ao carrinho", callback_data: `add_to_cart_${product.id}_1` }],
-          [{ text: "🔎 Ver detalhes", callback_data: `product_${product.id}` }],
-        ],
-      };
-      if (product.image_url) {
-        await ctx.replyWithPhoto(product.image_url, { caption, reply_markup: keyboard });
-      } else {
-        await ctx.reply(caption, { reply_markup: keyboard });
-      }
-    }
   } catch (error) {
     console.error("Error in handleViewProducts:", error);
     await ctx.reply("⚠️ Ocorreu um erro ao carregar os produtos.");
