@@ -15,7 +15,33 @@ const rawPublicUrl =
       : "http://localhost:3000";
 const publicUrl = /^https?:\/\//i.test(rawPublicUrl) ? rawPublicUrl : `https://${rawPublicUrl}`;
 
-export const config = {
+type Config = {
+  telegram: {
+    token: string;
+    adminId: number;
+    webhookSecret: string;
+  };
+  supabase: {
+    url: string;
+    serviceRoleKey: string;
+  };
+  mercadopago: {
+    accessToken: string;
+    webhookSecret: string;
+  };
+  support: {
+    whatsappNumber: string;
+    whatsappDisplay: string;
+  };
+  server: {
+    port: number;
+    publicUrl: string;
+    webhookPath: string;
+    nodeEnv: string;
+  };
+};
+
+export const config: Config = {
   telegram: {
     token: process.env.TELEGRAM_BOT_TOKEN || "",
     adminId: parseInt(process.env.ADMIN_TELEGRAM_ID || "0", 10),
@@ -39,7 +65,7 @@ export const config = {
     webhookPath: process.env.TELEGRAM_WEBHOOK_PATH || "/telegram/webhook",
     nodeEnv: process.env.NODE_ENV || "development",
   },
-} as const;
+};
 
 // Validate required environment variables
 const requiredEnvVars = [
