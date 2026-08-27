@@ -1,5 +1,6 @@
 import supabase from "../database";
 import { Order, OrderStatus, PaymentStatus } from "../types";
+import { randomBytes } from "crypto";
 
 export async function createOrder(
   userId: string,
@@ -18,6 +19,7 @@ export async function createOrder(
       total,
       status: OrderStatus.PENDING,
       payment_status: PaymentStatus.PENDING,
+      delivery_token: randomBytes(8).toString("hex").toUpperCase(),
     })
     .select()
     .single();
@@ -51,6 +53,35 @@ export async function getOrderById(orderId: string) {
 
   if (error) throw error;
   return data;
+}
+
+export async function decrementOrderStock(orderId: string) {
+  const { data: items, error: itemsError } = await supabase
+    .from("order_items")
+    .select("product_id, quantity")
+    .eq("order_id", orderId);
+
+  if (itemsError) throw itemsError;
+
+  for (const item of items || []) {
+    const { data: product, error: productError } = await supabase
+      .from("products")
+      .select("stock")
+      .eq("id", item.product_id)
+      .single();
+
+    if (productError) throw productError;
+    if (product.stock < item.quantity) {
+      throw new Error(`Insufficient stock for product ${item.product_id}`);
+    }
+
+    const { error: updateError } = await supabase
+      .from("products")
+      .update({ stock: product.stock - item.quantity, updated_at: new Date().toISOString() })
+      .eq("id", item.product_id);
+
+    if (updateError) throw updateError;
+  }
 }
 
 export async function getUserOrders(userId: string) {

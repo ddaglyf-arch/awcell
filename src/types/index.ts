@@ -65,6 +65,7 @@ export interface Order {
   total: number;
   status: OrderStatus;
   payment_id: string | null;
+  delivery_token: string | null;
   payment_status: PaymentStatus;
   created_at: string;
   updated_at: string;
