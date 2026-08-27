@@ -196,16 +196,19 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
 
       if (!orderError && order) {
         const statusChanged = order.payment_status !== payment.status;
+        const shouldNotifyApproved = payment.status === "approved" && !order.delivery_notified_at;
 
-        if (!statusChanged) {
+        if (!statusChanged && !shouldNotifyApproved) {
           console.log("Mercado Pago notification already processed", { orderId, paymentId });
           return;
         }
 
         // Process the payment
-        await processWebhookNotification(paymentId, orderId, order.total);
+        if (statusChanged) {
+          await processWebhookNotification(paymentId, orderId, order.total);
+        }
 
-        if (payment.status === "approved") {
+        if (payment.status === "approved" && statusChanged) {
           await decrementOrderStock(orderId);
         }
 
@@ -274,6 +277,12 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
                   { source: receiptPdf, filename: `comprovante-${orderId.substring(0, 8)}.pdf` },
                   { caption: "📄 Comprovante da compra. Envie este arquivo junto com o token no WhatsApp." },
                 );
+
+                await supabase
+                  .from("orders")
+                  .update({ delivery_notified_at: new Date().toISOString() })
+                  .eq("id", orderId)
+                  .is("delivery_notified_at", null);
               }
             } catch (error) {
               console.error("Error sending Telegram message:", error);
