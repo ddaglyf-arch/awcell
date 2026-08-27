@@ -226,57 +226,78 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
 
             let message = "";
             if (payment.status === "approved") {
-              message = storeConfig?.payment_approved_message || "Pagamento aprovado!";
+              message = storeConfig?.payment_approved_message || "✅ Pagamento aprovado com sucesso!";
               message += `\n\n👤 Cliente: ${customerName}`;
-              message += `\n\n✅ Pedido #${orderId.substring(0, 8)}\n💰 Total: R$ ${(order.total / 100).toFixed(2)}`;
+              message += `\n\n📋 Pedido #${orderId.substring(0, 8)}\n💰 Total: R$ ${(order.total / 100).toFixed(2)}`;
               message += "\n\n📦 Produtos:\n";
               for (const item of order.order_items || []) {
                 message += `• ${item.products?.name || "Produto"} x${item.quantity}\n`;
               }
-              message += `\n🔑 Token de entrega: ${order.delivery_token || "consulte o pedido"}`;
+              message += `\n🔑 Token de entrega: <code>${order.delivery_token || "consulte o pedido"}</code>`;
               message += `\n\n📲 Para receber o produto, fale no WhatsApp ${config.support.whatsappDisplay}.`;
-              message += "\nEnvie o token e um print desta tela de pagamento aprovado.";
+              message += "\n\n✉️ Seu comprovante (PDF) está sendo enviado...";
             } else if (payment.status === "pending") {
-              message = storeConfig?.payment_pending_message || "Pagamento pendente.";
+              message = storeConfig?.payment_pending_message || "⏳ Pagamento pendente. Aguardando confirmação...";
             } else if (payment.status === "rejected") {
-              message = storeConfig?.payment_rejected_message || "Pagamento recusado.";
+              message = storeConfig?.payment_rejected_message || "❌ Pagamento recusado. Tente novamente.";
             }
 
             try {
               await bot.telegram.sendMessage(user.telegram_id, message, {
+                parse_mode: "HTML",
                 reply_markup: {
                   inline_keyboard: [[
                     {
                       text: "📲 Falar no WhatsApp",
-                      url: `https://wa.me/${config.support.whatsappNumber}`,
+                      url: `https://wa.me/${config.support.whatsappNumber}?text=Olá, preciso do meu pedido. Token: ${order.delivery_token || "consulte o pedido"}`,
                     },
                   ]],
                 },
               });
 
               if (payment.status === "approved") {
-                const receiptPdf = createPurchaseReceiptPdf({
-                  orderId,
-                  customerName,
-                  customerTelegramId: user.telegram_id,
-                  createdAt: order.created_at,
-                  paymentMethod: "PIX / Mercado Pago",
-                  total: order.total,
-                  deliveryToken: order.delivery_token || "CONSULTAR PEDIDO",
-                  whatsapp: config.support.whatsappDisplay,
-                  items: (order.order_items || []).map((item: any) => ({
-                    name: item.products?.name || "Produto",
-                    quantity: item.quantity,
-                    unitPrice: item.unit_price,
-                    subtotal: item.subtotal || item.unit_price * item.quantity,
-                  })),
-                });
+                try {
+                  const receiptPdf = createPurchaseReceiptPdf({
+                    orderId,
+                    customerName,
+                    customerTelegramId: user.telegram_id,
+                    createdAt: order.created_at,
+                    paymentMethod: "PIX / Mercado Pago",
+                    total: order.total,
+                    deliveryToken: order.delivery_token || "CONSULTAR PEDIDO",
+                    whatsapp: config.support.whatsappDisplay,
+                    items: (order.order_items || []).map((item: any) => ({
+                      name: item.products?.name || "Produto",
+                      quantity: item.quantity,
+                      unitPrice: item.unit_price,
+                      subtotal: item.subtotal || item.unit_price * item.quantity,
+                    })),
+                  });
 
-                await bot.telegram.sendDocument(
-                  user.telegram_id,
-                  { source: receiptPdf, filename: `comprovante-${orderId.substring(0, 8)}.pdf` },
-                  { caption: "📄 Comprovante da compra. Envie este arquivo junto com o token no WhatsApp." },
-                );
+                  console.log("📄 Enviando PDF do comprovante para", user.telegram_id);
+                  
+                  await bot.telegram.sendDocument(
+                    user.telegram_id,
+                    { source: receiptPdf, filename: `comprovante-${orderId.substring(0, 8)}.pdf` },
+                    { 
+                      caption: `📄 Comprovante da compra #${orderId.substring(0, 8)}\n\nEnvie este arquivo junto com o token de entrega (${order.delivery_token || "consultar"}) no WhatsApp para receber seu pedido.`,
+                      parse_mode: "HTML"
+                    },
+                  );
+
+                  console.log("✅ PDF enviado com sucesso para", user.telegram_id);
+                } catch (pdfError) {
+                  console.error("❌ Erro ao enviar PDF:", pdfError);
+                  // Send a backup text message with the PDF info
+                  try {
+                    await bot.telegram.sendMessage(
+                      user.telegram_id,
+                      `📄 Comprovante da compra:\n\nPedido #${orderId.substring(0, 8)}\nToken: ${order.delivery_token || "CONSULTAR"}\n\nSeu comprovante foi processado! Acesse o histórico de pedidos para mais detalhes.`
+                    );
+                  } catch (backupError) {
+                    console.error("❌ Erro ao enviar mensagem de backup:", backupError);
+                  }
+                }
 
                 await supabase
                   .from("orders")
@@ -285,7 +306,7 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
                   .is("delivery_notified_at", null);
               }
             } catch (error) {
-              console.error("Error sending Telegram message:", error);
+              console.error("❌ Erro ao enviar notificação de pagamento:", error);
             }
           }
         }
