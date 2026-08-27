@@ -4,6 +4,16 @@ dotenv.config();
 
 export const DEFAULT_BANNER_IMAGE_URL = "https://i.postimg.cc/7Htz3vX9/4936162500223372332.jpg";
 
+const configuredPublicUrl = process.env.PUBLIC_URL?.trim();
+const railwayPublicDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+const isExampleUrl = configuredPublicUrl?.includes("seu-app") || configuredPublicUrl?.includes("example.com");
+const publicUrl =
+  !isExampleUrl && configuredPublicUrl
+    ? configuredPublicUrl
+    : railwayPublicDomain
+      ? `https://${railwayPublicDomain}`
+      : "http://localhost:3000";
+
 export const config = {
   telegram: {
     token: process.env.TELEGRAM_BOT_TOKEN || "",
@@ -20,11 +30,7 @@ export const config = {
   },
   server: {
     port: parseInt(process.env.PORT || "3000", 10),
-    publicUrl:
-      process.env.PUBLIC_URL ||
-      (process.env.RAILWAY_PUBLIC_DOMAIN
-        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-        : "http://localhost:3000"),
+    publicUrl,
     webhookPath: process.env.TELEGRAM_WEBHOOK_PATH || "/telegram/webhook",
     nodeEnv: process.env.NODE_ENV || "development",
   },

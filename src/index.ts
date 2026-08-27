@@ -245,8 +245,10 @@ app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
 
   try {
-    if (config.server.nodeEnv === "production" && config.server.publicUrl.startsWith("http://localhost")) {
-      throw new Error("Defina o domínio público da Railway em RAILWAY_PUBLIC_DOMAIN ou PUBLIC_URL.");
+    if (config.server.nodeEnv === "production" && !config.server.publicUrl.startsWith("https://")) {
+      throw new Error(
+        "Defina PUBLIC_URL com o domínio https:// da Railway ou gere um domínio público para preencher RAILWAY_PUBLIC_DOMAIN."
+      );
     }
 
     const webhookUrl = `${config.server.publicUrl.replace(/\/$/, "")}${config.server.webhookPath}`;
