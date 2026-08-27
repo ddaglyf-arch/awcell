@@ -33,6 +33,7 @@ import { handleCheckout, handleCancelCheckout } from "./handlers/checkoutHandler
 import { processWebhookNotification } from "./services/paymentService";
 import { decrementOrderStock } from "./services/orderService";
 import supabase from "./database";
+import { createPurchaseReceiptPdf } from "./utils/receiptPdf";
 
 // Initialize Express and Bot
 const app = express();
@@ -211,17 +212,19 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
         // Send notification to user
         const { data: user } = await supabase
           .from("users")
-          .select("telegram_id")
+          .select("telegram_id, first_name, last_name")
           .eq("id", order.user_id)
           .single();
 
           if (user) {
             const { getStoreConfig } = await import("./database");
             const storeConfig = await getStoreConfig();
+            const customerName = [user.first_name, user.last_name].filter(Boolean).join(" ") || "Cliente";
 
             let message = "";
             if (payment.status === "approved") {
               message = storeConfig?.payment_approved_message || "Pagamento aprovado!";
+              message += `\n\n👤 Cliente: ${customerName}`;
               message += `\n\n✅ Pedido #${orderId.substring(0, 8)}\n💰 Total: R$ ${(order.total / 100).toFixed(2)}`;
               message += "\n\n📦 Produtos:\n";
               for (const item of order.order_items || []) {
@@ -247,6 +250,31 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
                   ]],
                 },
               });
+
+              if (payment.status === "approved") {
+                const receiptPdf = createPurchaseReceiptPdf({
+                  orderId,
+                  customerName,
+                  customerTelegramId: user.telegram_id,
+                  createdAt: order.created_at,
+                  paymentMethod: "PIX / Mercado Pago",
+                  total: order.total,
+                  deliveryToken: order.delivery_token || "CONSULTAR PEDIDO",
+                  whatsapp: config.support.whatsappDisplay,
+                  items: (order.order_items || []).map((item: any) => ({
+                    name: item.products?.name || "Produto",
+                    quantity: item.quantity,
+                    unitPrice: item.unit_price,
+                    subtotal: item.subtotal || item.unit_price * item.quantity,
+                  })),
+                });
+
+                await bot.telegram.sendDocument(
+                  user.telegram_id,
+                  { source: receiptPdf, filename: `comprovante-${orderId.substring(0, 8)}.pdf` },
+                  { caption: "📄 Comprovante da compra. Envie este arquivo junto com o token no WhatsApp." },
+                );
+              }
             } catch (error) {
               console.error("Error sending Telegram message:", error);
             }
