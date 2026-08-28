@@ -8,8 +8,16 @@ const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 router.use((req: Request, res: Response, next) => {
-  const allowedOrigin = process.env.FRONTEND_URL || "*";
-  res.header("Access-Control-Allow-Origin", allowedOrigin);
+  const allowedOrigins = (process.env.FRONTEND_URL || "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  const requestOrigin = req.header("Origin")?.replace(/\/$/, "");
+
+  if (requestOrigin && (allowedOrigins.length === 0 || allowedOrigins.includes(requestOrigin))) {
+    res.header("Access-Control-Allow-Origin", requestOrigin);
+    res.header("Vary", "Origin");
+  }
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
   res.header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   if (req.method === "OPTIONS") return res.sendStatus(204);
