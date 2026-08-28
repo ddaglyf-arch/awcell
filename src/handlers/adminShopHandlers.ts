@@ -1,6 +1,6 @@
 import { Context, Telegraf } from "telegraf";
 import { createHash } from "crypto";
-import { supabase } from "../database";
+import supabase from "../database";
 
 interface ConversationState {
   step: string;
@@ -124,7 +124,7 @@ export async function processShopCreationFlow(ctx: Context) {
   const adminId = ctx.from?.id;
   if (!adminId || ctx.chat?.type !== "private") return;
 
-  const text = ctx.message?.text?.trim() || "";
+  const text = ctx.message && "text" in ctx.message ? ctx.message.text.trim() : "";
   const state = conversationStates.get(adminId);
 
   if (!state) return;

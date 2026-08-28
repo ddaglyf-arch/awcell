@@ -133,6 +133,18 @@ bot.on("callback_query", async (ctx) => {
         await handleAdminStats(ctx);
       } else if (data === "admin_logs") {
         await handleAdminLogs(ctx);
+      } else if (data === "admin_list_shops") {
+        const { handleAdminListShops } = await import("./handlers/adminShopHandlers");
+        await handleAdminListShops(ctx);
+      } else if (data === "admin_create_shop_form") {
+        const { handleAdminCreateShop } = await import("./handlers/adminShopHandlers");
+        await handleAdminCreateShop(ctx);
+      } else if (data === "admin_edit_shop") {
+        const { handleAdminEditShop } = await import("./handlers/adminShopHandlers");
+        await handleAdminEditShop(ctx);
+      } else if (data === "admin_deactivate_shop") {
+        const { handleAdminDeactivateShop } = await import("./handlers/adminShopHandlers");
+        await handleAdminDeactivateShop(ctx);
       } else if (data === "admin_create_product") {
         await handleCreateProduct(ctx);
       } else if (data === "admin_list_products") {
@@ -154,18 +166,6 @@ bot.on("callback_query", async (ctx) => {
       }
     } else if (data?.startsWith("select_category_")) {
       await handleSelectProductCategory(ctx, data.replace("select_category_", ""));
-    } else if (data === "admin_list_shops") {
-        const { handleAdminListShops } = await import("./handlers/adminShopHandlers");
-        await handleAdminListShops(ctx);
-      } else if (data === "admin_create_shop_form") {
-        const { handleAdminCreateShop } = await import("./handlers/adminShopHandlers");
-        await handleAdminCreateShop(ctx);
-      } else if (data === "admin_edit_shop") {
-        const { handleAdminEditShop } = await import("./handlers/adminShopHandlers");
-        await handleAdminEditShop(ctx);
-    } else if (data === "admin_deactivate_shop") {
-        const { handleAdminDeactivateShop } = await import("./handlers/adminShopHandlers");
-        await handleAdminDeactivateShop(ctx);
     }
 
   } catch (error) {

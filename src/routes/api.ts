@@ -1,6 +1,6 @@
 import { Request, Response, Router } from "express";
 import { createHash } from "crypto";
-import { supabase } from "../database";
+import supabase from "../database";
 import jwt from "jsonwebtoken";
 
 const router = Router();
@@ -301,7 +301,7 @@ router.get("/shops", async (req: Request, res: Response) => {
 
     // Get config for each shop
     const shopsWithConfig = await Promise.all(
-      (shops || []).map(async (shop) => {
+      (shops || []).map(async (shop: any) => {
         const { data: config } = await supabase
           .from("shop_configs")
           .select("*")
@@ -432,7 +432,7 @@ router.get("/stats", verifyToken, async (req: Request, res: Response) => {
       .eq("payment_status", "approved")
       .gte("created_at", firstDayOfMonth.toISOString());
 
-    const salesThisMonth = (salesData || []).reduce((sum, order) => sum + (order.total || 0), 0);
+    const salesThisMonth = (salesData || []).reduce((sum: number, order: { total?: number }) => sum + (order.total || 0), 0);
 
     res.json({
       totalProducts,

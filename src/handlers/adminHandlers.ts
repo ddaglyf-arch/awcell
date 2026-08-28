@@ -39,6 +39,7 @@ Bem-vindo! Selecione uma opção:
       reply_markup: {
         inline_keyboard: [
           [{ text: "🏪 Gerenciar Lojas", callback_data: "admin_shops_menu" }],
+          [{ text: "➕ Criar Loja", callback_data: "admin_create_shop_form" }],
           [{ text: "📦 Produtos", callback_data: "admin_products" }],
           [{ text: "🗂️ Categorias", callback_data: "admin_categories" }],
           [{ text: "🛒 Pedidos", callback_data: "admin_orders" }],
