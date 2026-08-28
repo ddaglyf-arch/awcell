@@ -1,6 +1,7 @@
 import { Context, Telegraf } from "telegraf";
 import { createHash } from "crypto";
 import supabase from "../database";
+import { config } from "../config";
 
 interface ConversationState {
   step: string;
@@ -74,6 +75,11 @@ export async function handleAdminListShops(ctx: Context) {
 }
 
 export async function handleAdminManageUsers(ctx: Context) {
+  if (!ctx.from || ctx.from.id !== config.telegram.adminId) {
+    await ctx.reply("🔐 Você não tem permissão para gerenciar lojas.");
+    return;
+  }
+
   const message = `
 👥 GERENCIAR USUÁRIOS LOJISTAS
 
@@ -99,6 +105,10 @@ Envie o número da opção:
       ],
     },
   });
+}
+
+export async function handleManageCommand(ctx: Context) {
+  await handleAdminManageUsers(ctx);
 }
 
 export async function handleAdminEditShop(ctx: Context) {

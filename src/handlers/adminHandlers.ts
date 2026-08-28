@@ -484,7 +484,10 @@ export async function handleAdminLogs(ctx: Context) {
 }
 
 export function registerAdminHandlers(bot: Telegraf<Context>) {
-  bot.command("admin", handleAdminPanel);
+  bot.command("gerenciar", async (ctx) => {
+    const { handleManageCommand } = await import("./adminShopHandlers");
+    await handleManageCommand(ctx);
+  });
 
   // Handle text messages for conversations
   bot.on("message", async (ctx) => {

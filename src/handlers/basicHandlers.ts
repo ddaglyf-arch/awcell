@@ -79,6 +79,7 @@ export async function handleHelp(ctx: Context) {
 
 Comandos para administrador:
 /admin - Acessar painel de administração
+/gerenciar - Gerenciar lojas
 `;
 
   await ctx.reply(helpText);
