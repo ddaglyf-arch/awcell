@@ -122,6 +122,13 @@ CREATE TABLE IF NOT EXISTS shop_product_deliveries (
   delivery_type VARCHAR(20) NOT NULL CHECK (delivery_type IN ('manual','automatic')), delivery_content TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS shop_delivery_stock (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), product_id UUID NOT NULL REFERENCES shop_products(id) ON DELETE CASCADE,
+  content TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'available' CHECK (status IN ('available','delivered')),
+  order_id UUID, delivered_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_shop_delivery_stock_available ON shop_delivery_stock(product_id, status);
 CREATE TABLE IF NOT EXISTS shop_cart_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES shop_users(id) ON DELETE CASCADE, product_id UUID NOT NULL REFERENCES shop_products(id) ON DELETE CASCADE,
@@ -133,8 +140,10 @@ CREATE TABLE IF NOT EXISTS shop_orders (
   user_id UUID NOT NULL REFERENCES shop_users(id) ON DELETE CASCADE, total INTEGER NOT NULL CHECK (total >= 0),
   status VARCHAR(20) DEFAULT 'pending', payment_id VARCHAR(255), payment_status VARCHAR(20) DEFAULT 'pending',
   delivery_token VARCHAR(32) UNIQUE, delivery_notified_at TIMESTAMP, tracking_number VARCHAR(100),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  checkout_key VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE shop_orders ADD COLUMN IF NOT EXISTS checkout_key VARCHAR(100);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shop_orders_checkout_key ON shop_orders(shop_id, user_id, checkout_key) WHERE checkout_key IS NOT NULL;
 CREATE TABLE IF NOT EXISTS shop_order_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), order_id UUID NOT NULL REFERENCES shop_orders(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES shop_products(id), quantity INTEGER NOT NULL CHECK (quantity > 0),
@@ -234,6 +243,21 @@ RETURNS VOID AS $$
 BEGIN
   UPDATE shop_products SET stock = stock - quantity_input
   WHERE id = product_id_input AND stock >= quantity_input;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION claim_shop_delivery_item(product_id_input UUID, order_id_input UUID)
+RETURNS TABLE(content TEXT) AS $$
+BEGIN
+  RETURN QUERY
+  UPDATE shop_delivery_stock
+  SET status = 'delivered', order_id = order_id_input, delivered_at = CURRENT_TIMESTAMP
+  WHERE id = (
+    SELECT id FROM shop_delivery_stock
+    WHERE product_id = product_id_input AND status = 'available'
+    ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT 1
+  )
+  RETURNING shop_delivery_stock.content;
 END;
 $$ LANGUAGE plpgsql;
 

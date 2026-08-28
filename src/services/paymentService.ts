@@ -129,23 +129,32 @@ export async function processShopWebhookNotification(mpPaymentId: string, orderI
       await supabase.rpc("decrement_shop_product_stock", { product_id_input: item.product_id, quantity_input: item.quantity });
     }
     const { data: deliveries } = await supabase.from("shop_product_deliveries").select("product_id, delivery_type, delivery_content").in("product_id", (items || []).map(item => item.product_id));
+    let manualDelivery = false;
     for (const item of items || []) {
       const delivery = (deliveries || []).find(entry => entry.product_id === item.product_id);
       if (delivery?.delivery_type === "automatic") {
-        await supabase.from("shop_deliveries").insert({ shop_id: order.shop_id, order_id: order.id, product_id: item.product_id, user_id: order.user_id, delivery_type: "automatic", content: delivery.delivery_content, status: "delivered", delivered_at: new Date().toISOString() });
+        const { data: claimedItem } = await supabase.rpc("claim_shop_delivery_item", { product_id_input: item.product_id, order_id_input: order.id });
+        const stockItem = Array.isArray(claimedItem) ? claimedItem[0] : claimedItem;
+        if (!stockItem) {
+          manualDelivery = true;
+          await supabase.from("shop_deliveries").insert({ shop_id: order.shop_id, order_id: order.id, product_id: item.product_id, user_id: order.user_id, delivery_type: "manual", status: "pending" });
+          continue;
+        }
+        const deliveredAt = new Date().toISOString();
+        await supabase.from("shop_deliveries").insert({ shop_id: order.shop_id, order_id: order.id, product_id: item.product_id, user_id: order.user_id, delivery_type: "automatic", content: stockItem.content, status: "delivered", delivered_at: deliveredAt });
         if (customer?.email && process.env.RESEND_API_KEY) {
           await axios.post("https://api.resend.com/emails", {
             from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
             to: customer.email,
             subject: `Entrega do pedido ${order.id.substring(0, 8)}`,
-            html: `<p>Olá, ${customer.full_name || "cliente"}.</p><p>Seu produto foi liberado:</p><p><strong>${delivery.delivery_content}</strong></p>`,
+            html: `<p>Olá, ${customer.full_name || "cliente"}.</p><p>Seu produto foi liberado:</p><p><strong>${stockItem.content}</strong></p>`,
           }, { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } });
         }
       } else {
+        manualDelivery = true;
         await supabase.from("shop_deliveries").insert({ shop_id: order.shop_id, order_id: order.id, product_id: item.product_id, user_id: order.user_id, delivery_type: "manual", status: "pending" });
       }
     }
-    const manualDelivery = (deliveries || []).some(delivery => delivery?.delivery_type !== "automatic");
     await supabase.from("shop_orders").update({ status: manualDelivery ? "processing" : "delivered", delivery_notified_at: manualDelivery ? null : new Date().toISOString() }).eq("id", orderId).eq("status", "paid");
   }
   return { ...order, payment_status: paymentStatus };

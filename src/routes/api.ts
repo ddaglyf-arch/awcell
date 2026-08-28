@@ -244,7 +244,7 @@ router.post("/products", verifyToken, async (req: Request, res: Response) => {
       return res.status(403).json({ error: "Only owners can create products" });
     }
 
-    const { name, description, price, stock, category_id, image_url, compare_at_price, promotion_label, delivery_type, delivery_content } = req.body;
+    const { name, description, price, stock, category_id, image_url, compare_at_price, promotion_label, delivery_type, delivery_content, delivery_items } = req.body;
 
     const { data: product, error } = await supabase
       .from("shop_products")
@@ -270,6 +270,11 @@ router.post("/products", verifyToken, async (req: Request, res: Response) => {
       delivery_content: delivery_content || "Entrega manual pelo lojista",
     }, { onConflict: "product_id" });
     if (deliveryError) throw deliveryError;
+    const stockItems = Array.isArray(delivery_items) ? delivery_items.filter((item: unknown): item is string => typeof item === "string" && item.trim()).map((item: string) => ({ product_id: product.id, content: item.trim() })) : [];
+    if (stockItems.length) {
+      const { error: stockError } = await supabase.from("shop_delivery_stock").insert(stockItems);
+      if (stockError) throw stockError;
+    }
 
     res.status(201).json(product);
   } catch (error) {
@@ -384,6 +389,12 @@ router.get("/purchases", verifyToken, async (req: Request, res: Response) => {
   const { data, error } = await supabase.from("shop_orders").select("*, shop_order_items(*, shop_products(name, image_url)), shop_deliveries(*)").eq("shop_id", req.user.shop_id).eq("user_id", req.user.user_id).order("created_at", { ascending: false });
   if (error) return res.status(500).json({ error: "Internal server error" });
   res.json(data || []);
+});
+
+router.get("/orders/:id/payment", verifyToken, async (req: Request, res: Response) => {
+  const { data: order, error } = await supabase.from("shop_orders").select("id, status, payment_status, delivery_token, delivery_notified_at").eq("id", req.params.id).eq("shop_id", req.user.shop_id).eq("user_id", req.user.user_id).single();
+  if (error || !order) return res.status(404).json({ error: "Order not found" });
+  res.json(order);
 });
 
 router.get("/shop", verifyToken, async (req: Request, res: Response) => {
@@ -524,7 +535,7 @@ router.get("/stats", verifyToken, async (req: Request, res: Response) => {
 router.post("/checkout", verifyToken, async (req: Request, res: Response) => {
   try {
     const { shop_id, user_id } = req.user;
-    const { items } = req.body;
+    const { items, checkout_key } = req.body;
 
     if (req.user.user_type !== "customer") {
       return res.status(403).json({ error: "Only customers can checkout" });
@@ -532,6 +543,16 @@ router.post("/checkout", verifyToken, async (req: Request, res: Response) => {
 
     if (!items || items.length === 0) {
       return res.status(400).json({ error: "Cart is empty" });
+    }
+
+    if (!checkout_key || typeof checkout_key !== "string") {
+      return res.status(400).json({ error: "Checkout key is required" });
+    }
+
+    const { data: existingOrder } = await supabase.from("shop_orders").select("*, shop_payments(*)").eq("shop_id", shop_id).eq("user_id", user_id).eq("checkout_key", checkout_key).maybeSingle();
+    if (existingOrder) {
+      const existingPayment = Array.isArray(existingOrder.shop_payments) ? existingOrder.shop_payments[0] : existingOrder.shop_payments;
+      return res.json({ order: existingOrder, payment: existingPayment ? { id: existingPayment.mercado_pago_id, qrCode: existingPayment.qr_code, qrCodeBase64: existingPayment.qr_code_base64, ticketUrl: existingPayment.ticket_url } : null, payment_url: existingPayment?.ticket_url || null, reused: true });
     }
 
     // Calculate total
@@ -572,6 +593,7 @@ router.post("/checkout", verifyToken, async (req: Request, res: Response) => {
         status: "pending",
         payment_status: "pending",
         delivery_token: randomBytes(16).toString("hex").toUpperCase(),
+        checkout_key,
       })
       .select()
       .single();
