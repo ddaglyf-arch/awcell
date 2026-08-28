@@ -37,6 +37,7 @@ Bem-vindo! Selecione uma opção:
     await ctx.reply(adminMenu, {
       reply_markup: {
         inline_keyboard: [
+          [{ text: "🏪 Gerenciar Lojas", callback_data: "admin_shops_menu" }],
           [{ text: "📦 Produtos", callback_data: "admin_products" }],
           [{ text: "🗂️ Categorias", callback_data: "admin_categories" }],
           [{ text: "🛒 Pedidos", callback_data: "admin_orders" }],

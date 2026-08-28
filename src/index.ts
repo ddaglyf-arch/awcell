@@ -48,6 +48,10 @@ bot.catch((error, ctx) => {
 // Middleware
 app.use(express.json());
 
+// API Routes
+import apiRouter from "./routes/api";
+app.use("/api", apiRouter);
+
 // Bot middleware
 bot.use(ensureUserExists);
 
@@ -92,6 +96,16 @@ bot.on("callback_query", async (ctx) => {
       const productId = data.replace("product_", "");
       await handleProductDetail(ctx, productId);
     } else if (data?.startsWith("add_to_cart_")) {
+      // Handle text messages for admin shop creation flow
+      bot.on("text", async (ctx) => {
+        try {
+          const { processShopCreationFlow } = await import("./handlers/adminShopHandlers");
+          await processShopCreationFlow(ctx);
+        } catch (error) {
+          console.error("Error processing text message:", error);
+        }
+      });
+
       const parts = data.replace("add_to_cart_", "").split("_");
       const productId = parts[0];
       const quantity = parseInt(parts[1]) || 1;
@@ -117,6 +131,10 @@ bot.on("callback_query", async (ctx) => {
       if (!ctx.from || ctx.from.id !== config.telegram.adminId) {
         await ctx.reply("🔐 Acesso negado.");
       } else if (data === "admin_products") {
+        } else if (data === "admin_shops_menu") {
+          const { handleAdminManageUsers } = await import("./handlers/adminShopHandlers");
+          await handleAdminManageUsers(ctx);
+        } else if (data === "admin_products") {
         await handleAdminProducts(ctx);
       } else if (data === "admin_categories") {
         await handleAdminCategories(ctx);
@@ -147,6 +165,18 @@ bot.on("callback_query", async (ctx) => {
       }
     } else if (data?.startsWith("select_category_")) {
       await handleSelectProductCategory(ctx, data.replace("select_category_", ""));
+      } else if (data === "admin_list_shops") {
+        const { handleAdminListShops } = await import("./handlers/adminShopHandlers");
+        await handleAdminListShops(ctx);
+      } else if (data === "admin_create_shop_form") {
+        const { handleAdminCreateShop } = await import("./handlers/adminShopHandlers");
+        await handleAdminCreateShop(ctx);
+      } else if (data === "admin_edit_shop") {
+        const { handleAdminEditShop } = await import("./handlers/adminShopHandlers");
+        await handleAdminEditShop(ctx);
+      } else if (data === "admin_deactivate_shop") {
+        const { handleAdminDeactivateShop } = await import("./handlers/adminShopHandlers");
+        await handleAdminDeactivateShop(ctx);
     }
 
   } catch (error) {
