@@ -163,6 +163,24 @@ bot.on("callback_query", async (ctx) => {
         await handleAdminOrdersList(ctx, "cancelled");
       } else if (data === "admin_orders_delivered") {
         await handleAdminOrdersList(ctx, "delivered");
+      } else if (
+        data === "admin_edit_product" ||
+        data === "admin_delete_product" ||
+        data === "admin_stock_product" ||
+        data === "admin_edit_category" ||
+        data === "admin_delete_category"
+      ) {
+        await ctx.reply("⚠️ Esta função está sendo preparada. Use Criar, Listar ou Voltar por enquanto.", {
+          reply_markup: {
+            inline_keyboard: [[{ text: "⬅️ Voltar", callback_data: data.includes("category") ? "admin_categories" : "admin_products" }]],
+          },
+        });
+      } else {
+        await ctx.reply("⚠️ Opção administrativa não reconhecida.", {
+          reply_markup: {
+            inline_keyboard: [[{ text: "🔐 Voltar ao painel", callback_data: "admin_panel" }]],
+          },
+        });
       }
     } else if (data?.startsWith("select_category_")) {
       await handleSelectProductCategory(ctx, data.replace("select_category_", ""));
