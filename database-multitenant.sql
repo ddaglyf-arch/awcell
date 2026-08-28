@@ -354,5 +354,5 @@ ON CONFLICT DO NOTHING;
 -- CREATE shop_configs FOR ALL 50 SHOPS
 -- ============================================
 INSERT INTO shop_configs (shop_id)
-SELECT id FROM shops WHERE shop_id NOT IN (SELECT shop_id FROM shop_configs)
+SELECT id FROM shops WHERE id NOT IN (SELECT shop_id FROM shop_configs)
 ON CONFLICT DO NOTHING;

@@ -6,6 +6,15 @@ import jwt from "jsonwebtoken";
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
+router.use((req: Request, res: Response, next) => {
+  const allowedOrigin = process.env.FRONTEND_URL || "*";
+  res.header("Access-Control-Allow-Origin", allowedOrigin);
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
 }
@@ -120,6 +129,75 @@ router.post("/auth/login", async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error("Login error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/auth/dashboard", verifyToken, async (req: Request, res: Response) => {
+  try {
+    const { shop_id, user_type } = req.user;
+    const { password } = req.body;
+
+    if (user_type !== "owner" || !password) {
+      return res.status(403).json({ error: "Dashboard access denied" });
+    }
+
+    const { data: shop, error } = await supabase
+      .from("shops")
+      .select("dashboard_password_hash, is_active, plan_expires_at")
+      .eq("id", shop_id)
+      .single();
+
+    if (error || !shop || !shop.is_active || new Date(shop.plan_expires_at) < new Date()) {
+      return res.status(403).json({ error: "Shop is not active or expired" });
+    }
+
+    if (!verifyPassword(password, shop.dashboard_password_hash)) {
+      return res.status(401).json({ error: "Invalid dashboard password" });
+    }
+
+    res.json({ access: true });
+  } catch (error) {
+    console.error("Dashboard authentication error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/auth/register", async (req: Request, res: Response) => {
+  try {
+    const { shop_number, full_name, cpf, password, phone } = req.body;
+    if (!shop_number || !full_name || !cpf || !password || password.length < 6) {
+      return res.status(400).json({ error: "Nome, CPF e senha de pelo menos 6 caracteres são obrigatórios" });
+    }
+
+    const { data: shop } = await supabase
+      .from("shops")
+      .select("id, shop_name, shop_number, is_active, plan_expires_at")
+      .eq("shop_number", shop_number)
+      .single();
+
+    if (!shop || !shop.is_active || new Date(shop.plan_expires_at) < new Date()) {
+      return res.status(403).json({ error: "Loja não encontrada ou plano expirado" });
+    }
+
+    const { data: customer, error } = await supabase
+      .from("shop_users")
+      .insert({ shop_id: shop.id, full_name, cpf: String(cpf).replace(/\D/g, ""), password_hash: hashPassword(password), phone })
+      .select("id, full_name, cpf, shop_id")
+      .single();
+
+    if (error) {
+      if (error.code === "23505") return res.status(409).json({ error: "CPF já cadastrado nesta loja" });
+      throw error;
+    }
+
+    res.status(201).json({
+      token: generateToken(shop.id, customer.id, "customer"),
+      user: { id: customer.id, name: customer.full_name, cpf: customer.cpf, role: "customer" },
+      shop,
+    });
+  } catch (error) {
+    console.error("Customer registration error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -246,6 +324,16 @@ router.get("/shops/:id/products", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
+    const { data: shop, error: shopError } = await supabase
+      .from("shops")
+      .select("id")
+      .eq("id", id)
+      .eq("is_active", true)
+      .gte("plan_expires_at", new Date().toISOString())
+      .single();
+
+    if (shopError || !shop) return res.status(404).json({ error: "Shop not found" });
+
     const { data: products, error } = await supabase
       .from("shop_products")
       .select("*")
@@ -259,6 +347,26 @@ router.get("/shops/:id/products", async (req: Request, res: Response) => {
     console.error("Error fetching shop products:", error);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+router.get("/categories", verifyToken, async (req: Request, res: Response) => {
+  const { data, error } = await supabase
+    .from("shop_categories")
+    .select("*")
+    .eq("shop_id", req.user.shop_id)
+    .eq("active", true)
+    .order("display_order");
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
+router.patch("/products/:id", verifyToken, async (req: Request, res: Response) => {
+  if (req.user.user_type !== "owner") return res.status(403).json({ error: "Only owners can edit products" });
+  const allowed = ["name", "description", "price", "stock", "image_url", "category_id", "active"];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
+  const { data, error } = await supabase.from("shop_products").update(updates).eq("id", req.params.id).eq("shop_id", req.user.shop_id).select().single();
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data);
 });
 
 // ============================================

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#102a43">
+  <title>Vitrine | Plataforma de lojas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="brand-panel">
+      <div class="mark">V</div>
+      <p class="eyebrow">PLATAFORMA DE COMÉRCIO</p>
+      <h1>Uma vitrine para cada negócio.</h1>
+      <p class="brand-copy">Acesse sua loja, acompanhe pedidos e mantenha seus produtos em movimento.</p>
+      <div class="brand-note"><span class="pulse"></span><span>Ambiente conectado ao backend</span></div>
+    </section>
+
+    <section class="app-panel">
+      <header class="topbar">
+        <div><span class="eyebrow">ACESSO SEGURO</span><h2 id="page-title">Entrar na plataforma</h2></div>
+        <button class="ghost-button hidden" id="logout-button">Sair</button>
+      </header>
+
+      <div id="notice" class="notice hidden"></div>
+      <section id="login-view" class="view">
+        <div class="tabs"><button class="tab active" data-mode="owner">Lojista</button><button class="tab" data-mode="customer">Cliente</button></div>
+        <form id="login-form" class="form-grid">
+          <label>Loja <input name="shop_number" type="number" min="1" max="50" placeholder="Ex.: 7" required></label>
+          <label id="username-label">Usuário <input name="username" placeholder="Seu usuário" required></label>
+          <label class="full">Senha <input name="password" type="password" minlength="6" placeholder="Sua senha" required></label>
+          <button class="primary-button full" type="submit">Entrar <span>→</span></button>
+        </form>
+        <button id="show-register" class="text-button">Ainda não sou cliente? Criar acesso com CPF</button>
+      </section>
+
+      <section id="register-view" class="view hidden">
+        <button class="back-button" id="back-login">← Voltar para login</button>
+        <h3>Criar acesso de cliente</h3>
+        <form id="register-form" class="form-grid">
+          <label>Loja <input name="shop_number" type="number" min="1" max="50" required></label>
+          <label>Nome completo <input name="full_name" required></label>
+          <label>CPF <input name="cpf" inputmode="numeric" placeholder="Somente números" required></label>
+          <label>Telefone <input name="phone" inputmode="tel" placeholder="Opcional"></label>
+          <label class="full">Senha <input name="password" type="password" minlength="6" required></label>
+          <button class="primary-button full" type="submit">Criar acesso <span>→</span></button>
+        </form>
+      </section>
+
+      <section id="shop-view" class="view hidden">
+        <div class="welcome-row"><div><span class="eyebrow">SUA EXPERIÊNCIA</span><h3 id="welcome-title">Lojas disponíveis</h3></div><button class="outline-button" id="dashboard-button">Dashboard</button></div>
+        <div id="shop-list" class="shop-list"></div>
+        <div id="product-area" class="product-area hidden"><div class="section-heading"><div><span class="eyebrow">CATÁLOGO</span><h3 id="selected-shop-name"></h3></div><span id="product-count" class="count"></span></div><div id="products" class="products"></div></div>
+      </section>
+
+      <section id="dashboard-view" class="view hidden">
+        <button class="back-button" id="back-shop">← Voltar para lojas</button>
+        <div class="welcome-row"><div><span class="eyebrow">ÁREA DO LOJISTA</span><h3 id="dashboard-title">Seu dashboard</h3></div><span class="status-chip">Plano ativo</span></div>
+        <div class="metrics"><div><span>Produtos</span><strong id="metric-products">0</strong></div><div><span>Pedidos no mês</span><strong id="metric-orders">0</strong></div><div><span>Vendas no mês</span><strong id="metric-sales">R$ 0,00</strong></div></div>
+        <div class="section-heading"><div><span class="eyebrow">INVENTÁRIO</span><h3>Produtos da loja</h3></div><button class="primary-button compact" id="new-product">+ Produto</button></div>
+        <div id="dashboard-products" class="products"></div>
+        <form id="product-form" class="form-grid hidden product-form"><label>Nome <input name="name" required></label><label>Preço em centavos <input name="price" type="number" min="1" required></label><label>Estoque <input name="stock" type="number" min="0" required></label><label>Imagem (URL) <input name="image_url"></label><label class="full">Descrição <textarea name="description" rows="3" required></textarea></label><div class="form-actions full"><button type="button" class="outline-button" id="cancel-product">Cancelar</button><button class="primary-button" type="submit">Salvar produto</button></div></form>
+      </section>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

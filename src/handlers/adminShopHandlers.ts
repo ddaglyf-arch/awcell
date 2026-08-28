@@ -9,6 +9,10 @@ interface ConversationState {
 
 const conversationStates = new Map<number, ConversationState>();
 
+export function hasShopConversation(telegramId: number): boolean {
+  return conversationStates.has(telegramId);
+}
+
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
 }

@@ -16,6 +16,7 @@ import {
   logAdminAction,
 } from "../services/adminConversationService";
 import { getUserByTelegramId } from "../database";
+import { hasShopConversation, processShopCreationFlow } from "./adminShopHandlers";
 
 // ===== ADMIN PANEL =====
 export async function handleAdminPanel(ctx: Context) {
@@ -489,6 +490,11 @@ export function registerAdminHandlers(bot: Telegraf<Context>) {
     if (!ctx.from) return;
 
     try {
+      if (hasShopConversation(ctx.from.id)) {
+        await processShopCreationFlow(ctx);
+        return;
+      }
+
       const user = await getUserByTelegramId(ctx.from.id);
       if (!user) return;
 
