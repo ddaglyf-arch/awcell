@@ -1,7 +1,8 @@
 import { Request, Response, Router } from "express";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import supabase from "../database";
 import jwt from "jsonwebtoken";
+import { createShopPixPayment } from "../services/paymentService";
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
@@ -165,7 +166,7 @@ router.post("/auth/dashboard", verifyToken, async (req: Request, res: Response) 
 
 router.post("/auth/register", async (req: Request, res: Response) => {
   try {
-    const { shop_number, full_name, cpf, password, phone } = req.body;
+    const { shop_number, full_name, cpf, password, phone, email } = req.body;
     if (!shop_number || !full_name || !cpf || !password || password.length < 6) {
       return res.status(400).json({ error: "Nome, CPF e senha de pelo menos 6 caracteres são obrigatórios" });
     }
@@ -182,7 +183,7 @@ router.post("/auth/register", async (req: Request, res: Response) => {
 
     const { data: customer, error } = await supabase
       .from("shop_users")
-      .insert({ shop_id: shop.id, full_name, cpf: String(cpf).replace(/\D/g, ""), password_hash: hashPassword(password), phone })
+      .insert({ shop_id: shop.id, full_name, cpf: String(cpf).replace(/\D/g, ""), password_hash: hashPassword(password), phone, email })
       .select("id, full_name, cpf, shop_id")
       .single();
 
@@ -235,7 +236,7 @@ router.post("/products", verifyToken, async (req: Request, res: Response) => {
       return res.status(403).json({ error: "Only owners can create products" });
     }
 
-    const { name, description, price, stock, category_id, image_url, compare_at_price, promotion_label } = req.body;
+    const { name, description, price, stock, category_id, image_url, compare_at_price, promotion_label, delivery_type, delivery_content } = req.body;
 
     const { data: product, error } = await supabase
       .from("shop_products")
@@ -254,6 +255,13 @@ router.post("/products", verifyToken, async (req: Request, res: Response) => {
       .single();
 
     if (error) throw error;
+
+    const { error: deliveryError } = await supabase.from("shop_product_deliveries").upsert({
+      product_id: product.id,
+      delivery_type: delivery_type === "automatic" ? "automatic" : "manual",
+      delivery_content: delivery_content || "Entrega manual pelo lojista",
+    }, { onConflict: "product_id" });
+    if (deliveryError) throw deliveryError;
 
     res.status(201).json(product);
   } catch (error) {
@@ -363,6 +371,13 @@ router.get("/categories", verifyToken, async (req: Request, res: Response) => {
   res.json(data || []);
 });
 
+router.get("/purchases", verifyToken, async (req: Request, res: Response) => {
+  if (req.user.user_type !== "customer") return res.status(403).json({ error: "Only customers can view purchases" });
+  const { data, error } = await supabase.from("shop_orders").select("*, shop_order_items(*, shop_products(name, image_url)), shop_deliveries(*)").eq("shop_id", req.user.shop_id).eq("user_id", req.user.user_id).order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
 router.get("/shop", verifyToken, async (req: Request, res: Response) => {
   const { data: shop, error } = await supabase.from("shops").select("*, shop_configs(*)").eq("id", req.user.shop_id).single();
   if (error || !shop) return res.status(404).json({ error: "Shop not found" });
@@ -426,7 +441,7 @@ router.get("/orders", verifyToken, async (req: Request, res: Response) => {
   try {
     const { shop_id, user_id, user_type } = req.user;
 
-    let query = supabase.from("shop_orders").select("*").eq("shop_id", shop_id);
+    let query = supabase.from("shop_orders").select("*, shop_order_items(*, shop_products(name, image_url)), shop_deliveries(*)").eq("shop_id", shop_id);
 
     if (user_type === "customer") {
       query = query.eq("user_id", user_id);
@@ -548,6 +563,7 @@ router.post("/checkout", verifyToken, async (req: Request, res: Response) => {
         total,
         status: "pending",
         payment_status: "pending",
+        delivery_token: randomBytes(16).toString("hex").toUpperCase(),
       })
       .select()
       .single();
@@ -565,12 +581,14 @@ router.post("/checkout", verifyToken, async (req: Request, res: Response) => {
       });
     }
 
-    // TODO: Generate payment with Mercado Pago
-    // For now, return a mock payment URL
+    const { data: customer } = await supabase.from("shop_users").select("email").eq("id", user_id).eq("shop_id", shop_id).single();
+    const payment = await createShopPixPayment(order.id, customer?.email, total / 100, shop_id);
+    await supabase.from("shop_cart_items").delete().eq("shop_id", shop_id).eq("user_id", user_id);
 
     res.json({
       order,
-      payment_url: `https://mercadopago.com/checkout/payment?order=${order.id}`,
+      payment,
+      payment_url: payment.ticketUrl,
     });
   } catch (error) {
     console.error("Error creating checkout:", error);

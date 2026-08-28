@@ -60,6 +60,97 @@ export async function createPixPayment(
   }
 }
 
+export async function createShopPixPayment(
+  orderId: string,
+  customerEmail: string | undefined,
+  amountInReais: number,
+  shopId: string,
+) {
+  const response = await axios.post(
+    `${MP_API_URL}/payments`,
+    {
+      transaction_amount: Number(amountInReais.toFixed(2)),
+      description: `Pedido ${orderId.substring(0, 8)}`,
+      payment_method_id: "pix",
+      payer: { email: customerEmail || `cliente_${orderId}@example.com` },
+      external_reference: orderId,
+      notification_url: `${config.server.publicUrl}/webhooks/mercadopago`,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${config.mercadopago.accessToken}`,
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": orderId,
+      },
+    },
+  );
+
+  const payment = response.data;
+  const transactionData = payment.point_of_interaction?.transaction_data || {};
+  const { error } = await supabase.from("shop_payments").insert({
+    shop_id: shopId,
+    order_id: orderId,
+    mercado_pago_id: String(payment.id),
+    status: "pending",
+    amount: Math.round(amountInReais * 100),
+    payment_method: "pix",
+    qr_code: transactionData.qr_code,
+    qr_code_base64: transactionData.qr_code_base64,
+    ticket_url: transactionData.ticket_url,
+  });
+  if (error) throw error;
+
+  return {
+    id: payment.id,
+    qrCode: transactionData.qr_code,
+    qrCodeBase64: transactionData.qr_code_base64,
+    ticketUrl: transactionData.ticket_url,
+  };
+}
+
+export async function processShopWebhookNotification(mpPaymentId: string, orderId: string, expectedAmount: number) {
+  const payment = await getPaymentStatus(mpPaymentId);
+  if (!payment || payment.external_reference !== orderId || payment.transaction_amount !== expectedAmount / 100) {
+    throw new Error("Invalid shop payment notification");
+  }
+
+  const paymentStatus = payment.status === "approved" ? "approved" : payment.status === "rejected" ? "rejected" : payment.status === "cancelled" ? "cancelled" : "pending";
+  const { data: order, error: orderError } = await supabase.from("shop_orders").select("*").eq("id", orderId).single();
+  if (orderError || !order) throw new Error("Shop order not found");
+
+  const changed = order.payment_status !== paymentStatus;
+  await supabase.from("shop_orders").update({ payment_id: String(mpPaymentId), payment_status: paymentStatus, status: paymentStatus === "approved" ? "paid" : order.status }).eq("id", orderId);
+  await supabase.from("shop_payments").update({ mercado_pago_id: String(mpPaymentId), status: paymentStatus, updated_at: new Date().toISOString() }).eq("order_id", orderId);
+
+  if (changed && paymentStatus === "approved") {
+    const { data: customer } = await supabase.from("shop_users").select("email, full_name").eq("id", order.user_id).single();
+    const { data: items } = await supabase.from("shop_order_items").select("product_id, quantity").eq("order_id", orderId);
+    for (const item of items || []) {
+      await supabase.rpc("decrement_shop_product_stock", { product_id_input: item.product_id, quantity_input: item.quantity });
+    }
+    const { data: deliveries } = await supabase.from("shop_product_deliveries").select("product_id, delivery_type, delivery_content").in("product_id", (items || []).map(item => item.product_id));
+    for (const item of items || []) {
+      const delivery = (deliveries || []).find(entry => entry.product_id === item.product_id);
+      if (delivery?.delivery_type === "automatic") {
+        await supabase.from("shop_deliveries").insert({ shop_id: order.shop_id, order_id: order.id, product_id: item.product_id, user_id: order.user_id, delivery_type: "automatic", content: delivery.delivery_content, status: "delivered", delivered_at: new Date().toISOString() });
+        if (customer?.email && process.env.RESEND_API_KEY) {
+          await axios.post("https://api.resend.com/emails", {
+            from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+            to: customer.email,
+            subject: `Entrega do pedido ${order.id.substring(0, 8)}`,
+            html: `<p>Olá, ${customer.full_name || "cliente"}.</p><p>Seu produto foi liberado:</p><p><strong>${delivery.delivery_content}</strong></p>`,
+          }, { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } });
+        }
+      } else {
+        await supabase.from("shop_deliveries").insert({ shop_id: order.shop_id, order_id: order.id, product_id: item.product_id, user_id: order.user_id, delivery_type: "manual", status: "pending" });
+      }
+    }
+    const manualDelivery = (deliveries || []).some(delivery => delivery?.delivery_type !== "automatic");
+    await supabase.from("shop_orders").update({ status: manualDelivery ? "processing" : "delivered", delivery_notified_at: manualDelivery ? null : new Date().toISOString() }).eq("id", orderId).eq("status", "paid");
+  }
+  return { ...order, payment_status: paymentStatus };
+}
+
 export async function createPaymentPreference(
   orderId: string,
   userId: string,

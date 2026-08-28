@@ -235,6 +235,19 @@ app.post("/webhooks/mercadopago", async (req: Request, res: Response) => {
     if (payment) {
       const orderId = payment.external_reference;
 
+      const { data: shopOrder } = await supabase
+        .from("shop_orders")
+        .select("id, total")
+        .eq("id", orderId)
+        .single();
+
+      if (shopOrder) {
+        const { processShopWebhookNotification } = await import("./services/paymentService");
+        await processShopWebhookNotification(String(paymentId), orderId, shopOrder.total);
+        console.log("✅ Pedido multi-loja atualizado pelo webhook", { orderId, paymentId });
+        return;
+      }
+
       // Get order from database
       const { data: order, error: orderError } = await supabase
         .from("orders")

@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS shop_admins (
 CREATE TABLE IF NOT EXISTS shop_users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   full_name VARCHAR(255) NOT NULL, cpf VARCHAR(20) NOT NULL, password_hash VARCHAR(255) NOT NULL,
-  phone VARCHAR(20), is_active BOOLEAN DEFAULT TRUE, last_login TIMESTAMP,
+  email VARCHAR(255), phone VARCHAR(20), is_active BOOLEAN DEFAULT TRUE, last_login TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(shop_id, cpf)
 );
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS shop_products (
 );
 CREATE TABLE IF NOT EXISTS shop_product_deliveries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), product_id UUID UNIQUE NOT NULL REFERENCES shop_products(id) ON DELETE CASCADE,
-  delivery_type VARCHAR(20) NOT NULL, delivery_content TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  delivery_type VARCHAR(20) NOT NULL CHECK (delivery_type IN ('manual','automatic')), delivery_content TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS shop_cart_items (
@@ -144,8 +144,20 @@ CREATE TABLE IF NOT EXISTS shop_payments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   order_id UUID UNIQUE NOT NULL REFERENCES shop_orders(id) ON DELETE CASCADE, mercado_pago_id VARCHAR(255),
   status VARCHAR(20) DEFAULT 'pending', amount INTEGER NOT NULL CHECK (amount > 0), payment_method VARCHAR(50),
+  qr_code TEXT, qr_code_base64 TEXT, ticket_url TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS shop_deliveries (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  order_id UUID NOT NULL REFERENCES shop_orders(id) ON DELETE CASCADE, product_id UUID NOT NULL REFERENCES shop_products(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES shop_users(id) ON DELETE CASCADE, delivery_type VARCHAR(20) NOT NULL CHECK (delivery_type IN ('manual','automatic')),
+  content TEXT, status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','delivered')), delivered_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+ALTER TABLE shop_users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE shop_payments ADD COLUMN IF NOT EXISTS qr_code TEXT;
+ALTER TABLE shop_payments ADD COLUMN IF NOT EXISTS qr_code_base64 TEXT;
+ALTER TABLE shop_payments ADD COLUMN IF NOT EXISTS ticket_url TEXT;
 CREATE TABLE IF NOT EXISTS shop_customer_addresses (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES shop_users(id) ON DELETE CASCADE, street VARCHAR(255) NOT NULL, number VARCHAR(20) NOT NULL,
@@ -166,6 +178,22 @@ ALTER TABLE shop_products ADD COLUMN IF NOT EXISTS compare_at_price INTEGER;
 ALTER TABLE shop_products ADD COLUMN IF NOT EXISTS promotion_label VARCHAR(100);
 ALTER TABLE shop_configs ADD COLUMN IF NOT EXISTS theme_primary_color VARCHAR(20) DEFAULT '#102A43';
 ALTER TABLE shop_configs ADD COLUMN IF NOT EXISTS theme_accent_color VARCHAR(20) DEFAULT '#E76F51';
+ALTER TABLE shop_users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE shop_payments ADD COLUMN IF NOT EXISTS qr_code TEXT;
+ALTER TABLE shop_payments ADD COLUMN IF NOT EXISTS qr_code_base64 TEXT;
+ALTER TABLE shop_payments ADD COLUMN IF NOT EXISTS ticket_url TEXT;
+DO $$
+DECLARE constraint_name TEXT;
+BEGIN
+  FOR constraint_name IN
+    SELECT conname FROM pg_constraint WHERE conrelid = 'shop_product_deliveries'::regclass AND contype = 'c'
+  LOOP
+    EXECUTE format('ALTER TABLE shop_product_deliveries DROP CONSTRAINT IF EXISTS %I', constraint_name);
+  END LOOP;
+  UPDATE shop_product_deliveries SET delivery_type = 'manual'
+  WHERE delivery_type NOT IN ('manual', 'automatic');
+  ALTER TABLE shop_product_deliveries ADD CONSTRAINT shop_product_deliveries_type_check CHECK (delivery_type IN ('manual','automatic'));
+END $$;
 CREATE TABLE IF NOT EXISTS shop_activity_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   user_id UUID REFERENCES shop_admins(id) ON DELETE SET NULL, action VARCHAR(100) NOT NULL, description TEXT,
@@ -200,6 +228,14 @@ BEGIN
     EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()', 'updated_at_' || table_name, table_name);
   END LOOP;
 END $$;
+
+CREATE OR REPLACE FUNCTION decrement_shop_product_stock(product_id_input UUID, quantity_input INTEGER)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE shop_products SET stock = stock - quantity_input
+  WHERE id = product_id_input AND stock >= quantity_input;
+END;
+$$ LANGUAGE plpgsql;
 
 -- Configuracao legada do bot
 INSERT INTO store_config (store_name, store_description, banner_image_url, welcome_message)
