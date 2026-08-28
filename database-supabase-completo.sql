@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS shop_products (
   category_id UUID REFERENCES shop_categories(id) ON DELETE SET NULL, name VARCHAR(255) NOT NULL, description TEXT NOT NULL,
   price INTEGER NOT NULL CHECK (price > 0), image_url TEXT, stock INTEGER DEFAULT 0 CHECK (stock >= 0), active BOOLEAN DEFAULT TRUE,
   delivery_type VARCHAR(20) DEFAULT 'physical', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(shop_id, name)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, compare_at_price INTEGER, promotion_label VARCHAR(100), UNIQUE(shop_id, name)
 );
 CREATE TABLE IF NOT EXISTS shop_product_deliveries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), product_id UUID UNIQUE NOT NULL REFERENCES shop_products(id) ON DELETE CASCADE,
@@ -158,8 +158,14 @@ CREATE TABLE IF NOT EXISTS shop_configs (
   banner_image_url TEXT, logo_url TEXT, welcome_message TEXT DEFAULT 'Bem-vindo à nossa loja!',
   payment_approved_message TEXT, payment_pending_message TEXT, payment_rejected_message TEXT, support_message TEXT,
   whatsapp_number VARCHAR(20), whatsapp_display VARCHAR(50), email_support VARCHAR(255),
+  theme_primary_color VARCHAR(20) DEFAULT '#102A43', theme_accent_color VARCHAR(20) DEFAULT '#E76F51',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE shop_products ADD COLUMN IF NOT EXISTS compare_at_price INTEGER;
+ALTER TABLE shop_products ADD COLUMN IF NOT EXISTS promotion_label VARCHAR(100);
+ALTER TABLE shop_configs ADD COLUMN IF NOT EXISTS theme_primary_color VARCHAR(20) DEFAULT '#102A43';
+ALTER TABLE shop_configs ADD COLUMN IF NOT EXISTS theme_accent_color VARCHAR(20) DEFAULT '#E76F51';
 CREATE TABLE IF NOT EXISTS shop_activity_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   user_id UUID REFERENCES shop_admins(id) ON DELETE SET NULL, action VARCHAR(100) NOT NULL, description TEXT,

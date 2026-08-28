@@ -12,6 +12,12 @@ export async function handleStart(ctx: Context) {
   }
 
   try {
+    if (ctx.from.id === (await import("../config")).config.telegram.adminId) {
+      const { handleAdminPanel } = await import("./adminHandlers");
+      await handleAdminPanel(ctx);
+      return;
+    }
+
     const storeConfig = await getStoreConfig();
     const user = await getUserByTelegramId(ctx.from.id);
 

@@ -235,7 +235,7 @@ router.post("/products", verifyToken, async (req: Request, res: Response) => {
       return res.status(403).json({ error: "Only owners can create products" });
     }
 
-    const { name, description, price, stock, category_id } = req.body;
+    const { name, description, price, stock, category_id, image_url, compare_at_price, promotion_label } = req.body;
 
     const { data: product, error } = await supabase
       .from("shop_products")
@@ -246,6 +246,9 @@ router.post("/products", verifyToken, async (req: Request, res: Response) => {
         price,
         stock,
         category_id,
+        image_url,
+        compare_at_price,
+        promotion_label,
       })
       .select()
       .single();
@@ -360,9 +363,54 @@ router.get("/categories", verifyToken, async (req: Request, res: Response) => {
   res.json(data || []);
 });
 
+router.get("/shop", verifyToken, async (req: Request, res: Response) => {
+  const { data: shop, error } = await supabase.from("shops").select("*, shop_configs(*)").eq("id", req.user.shop_id).single();
+  if (error || !shop) return res.status(404).json({ error: "Shop not found" });
+  res.json(shop);
+});
+
+router.get("/customers", verifyToken, async (req: Request, res: Response) => {
+  if (req.user.user_type !== "owner") return res.status(403).json({ error: "Only owners can view customers" });
+  const { data, error } = await supabase.from("shop_users").select("id, full_name, cpf, phone, is_active, created_at, last_login").eq("shop_id", req.user.shop_id).order("created_at", { ascending: false });
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
+router.patch("/shop/config", verifyToken, async (req: Request, res: Response) => {
+  if (req.user.user_type !== "owner") return res.status(403).json({ error: "Only owners can edit shop settings" });
+  const allowed = ["banner_image_url", "logo_url", "welcome_message", "support_message", "whatsapp_number", "whatsapp_display", "theme_primary_color", "theme_accent_color"];
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
+  const { data, error } = await supabase.from("shop_configs").upsert({ shop_id: req.user.shop_id, ...updates }, { onConflict: "shop_id" }).select().single();
+  if (error) return res.status(500).json({ error: "Could not save shop settings" });
+  res.json(data);
+});
+
+router.get("/cart", verifyToken, async (req: Request, res: Response) => {
+  if (req.user.user_type !== "customer") return res.status(403).json({ error: "Only customers have a cart" });
+  const { data, error } = await supabase.from("shop_cart_items").select("*, shop_products(*)").eq("shop_id", req.user.shop_id).eq("user_id", req.user.user_id);
+  if (error) return res.status(500).json({ error: "Internal server error" });
+  res.json(data || []);
+});
+
+router.post("/cart", verifyToken, async (req: Request, res: Response) => {
+  if (req.user.user_type !== "customer") return res.status(403).json({ error: "Only customers have a cart" });
+  const { product_id, quantity = 1 } = req.body;
+  const { data: product } = await supabase.from("shop_products").select("id, stock").eq("id", product_id).eq("shop_id", req.user.shop_id).eq("active", true).single();
+  if (!product || quantity < 1 || quantity > product.stock) return res.status(400).json({ error: "Produto indisponível ou quantidade inválida" });
+  const { data, error } = await supabase.from("shop_cart_items").upsert({ shop_id: req.user.shop_id, user_id: req.user.user_id, product_id, quantity }, { onConflict: "user_id,product_id" }).select("*, shop_products(*)").single();
+  if (error) return res.status(500).json({ error: "Could not update cart" });
+  res.status(201).json(data);
+});
+
+router.delete("/cart/:productId", verifyToken, async (req: Request, res: Response) => {
+  const { error } = await supabase.from("shop_cart_items").delete().eq("shop_id", req.user.shop_id).eq("user_id", req.user.user_id).eq("product_id", req.params.productId);
+  if (error) return res.status(500).json({ error: "Could not remove cart item" });
+  res.json({ success: true });
+});
+
 router.patch("/products/:id", verifyToken, async (req: Request, res: Response) => {
   if (req.user.user_type !== "owner") return res.status(403).json({ error: "Only owners can edit products" });
-  const allowed = ["name", "description", "price", "stock", "image_url", "category_id", "active"];
+  const allowed = ["name", "description", "price", "stock", "image_url", "category_id", "active", "compare_at_price", "promotion_label"];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
   const { data, error } = await supabase.from("shop_products").update(updates).eq("id", req.params.id).eq("shop_id", req.user.shop_id).select().single();
   if (error) return res.status(500).json({ error: "Internal server error" });
@@ -455,6 +503,10 @@ router.post("/checkout", verifyToken, async (req: Request, res: Response) => {
     const { shop_id, user_id } = req.user;
     const { items } = req.body;
 
+    if (req.user.user_type !== "customer") {
+      return res.status(403).json({ error: "Only customers can checkout" });
+    }
+
     if (!items || items.length === 0) {
       return res.status(400).json({ error: "Cart is empty" });
     }
@@ -468,9 +520,11 @@ router.post("/checkout", verifyToken, async (req: Request, res: Response) => {
         .from("shop_products")
         .select("*")
         .eq("id", item.product_id)
+        .eq("shop_id", shop_id)
+        .eq("active", true)
         .single();
 
-      if (!product) {
+      if (!product || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > product.stock) {
         return res.status(400).json({ error: `Product ${item.product_id} not found` });
       }
 
